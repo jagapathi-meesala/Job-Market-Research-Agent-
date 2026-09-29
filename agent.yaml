@@ -1,7 +1,6 @@
 # OpenGAP Manifest
 # Note: As per the implementation plan, this manifest assumes a basic structure 
 # due to the lack of live network schema verification capabilities.
-
 spec_version: "0.1.0"
 name: "job-market-research-agent"
 version: "1.0.0"
