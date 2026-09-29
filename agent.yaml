@@ -1,0 +1,18 @@
+# OpenGAP Manifest
+# Note: As per the implementation plan, this manifest assumes a basic structure 
+# due to the lack of live network schema verification capabilities.
+
+spec_version: "0.1.0"
+name: "job-market-research-agent"
+version: "1.0.0"
+description: "A deterministic agent that analyzes structured job-market information."
+author: "Antigravity implementation based on OpenGAP spec"
+
+tools:
+  - analyze-job-listings
+  - analyze-skill-demand
+  - analyze-salary-data
+  - analyze-location-demand
+  - analyze-company-demand
+  - calculate-skill-gap
+  - calculate-job-market-summary
