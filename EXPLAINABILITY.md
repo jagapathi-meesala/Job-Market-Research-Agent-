@@ -1,178 +1,380 @@
 # Job Market Research Agent Explainability
 
-## Agent Purpose
-The Job Market Research Agent is designed to process and analyze structured job-market datasets. Its primary purpose is to provide clear, deterministic, and explainable summaries (such as salary statistics and skill frequency distributions) without relying on unpredictable or opaque systems.
+## analyze-job-listings
 
-## Inputs
-All inputs to the agent and its underlying tools are expected to be structured data payloads (exclusively JSON or Python dictionaries). The agent does NOT parse raw HTML, scrape live websites, or execute web requests.
+### Agent purpose
+Analyze structured job listings to extract basic frequencies.
 
-## Decision/Process
-The agent does not "decide" things using machine learning or a probabilistic AI model. Its process is purely calculative and deterministic. Decisions made by the agent are limited to validation logic (e.g., "Is this salary positive?", "Does the job object contain an ID?").
+### Inputs
+YAML schema expects an object with a `jobs` array containing job objects. Required: `jobs`.
 
-## Limits
-- **No live access:** Cannot pull real-time data from the web.
-- **No data transformation:** Cannot convert currencies automatically without external conversion rates being provided.
-- **No forecasting:** Cannot guarantee job outcomes or predict future trends.
-- **Scope limitation:** Statistics represent ONLY the isolated dataset provided, and do not reflect broader macroeconomic conditions.
+### Decision/process
+Iterates the `jobs` array to compute total count and extracts basic fields if valid.
 
-## Output Contract
-All outputs will be structured dictionaries containing standard primitive types (`int`, `float`, `list`, `dict`, `str`) representing descriptive statistics, along with a `success` boolean to indicate whether the operation completed without encountering validation errors.
+### Limits
+Does not perform NLP analysis on titles. Relies strictly on the array length and structure.
 
-## Complete Execution Lifecycle
-1. Payload is received by the framework adapter.
-2. The adapter validates and formats the payload into standard structures for the `AgentCore`.
-3. `AgentCore` looks up and retrieves the requested tool from the `DynamicToolRegistry`.
-4. The requested tool strictly validates the payload. If the payload is invalid, the tool immediately returns a structured error.
-5. The tool performs standard, deterministic mathematical operations (e.g., aggregations, intersections).
-6. The tool returns a structured response containing the calculated metrics.
-7. The adapter translates the response back to the caller format.
+### Output contract
+Dictionary containing `total_jobs` (int) and `success` (bool) plus a `message`.
 
-## Tool-by-Tool Decision/Rule Transparency and Examples
+### Complete execution lifecycle
+Input adapter -> validate_input(jobs list exists) -> execute() counts list length -> return standard dict.
 
-### 1. analyze-job-listings
-- **Agent purpose**: Count and aggregate overall listings.
-- **Inputs**: `jobs` (array of objects).
-- **Decision/process**: Simple frequency counting based on array length.
-- **Limits**: Relies solely on the length and presence of fields in the `jobs` list.
-- **Output contract**: Returns `total_jobs` (int).
-- **Formula**: `total_jobs = len(jobs)`
-- **Tool-by-tool example**: 
-  - Input: `{"jobs": [{"job_id": "1", "title": "SE"}]}`
-  - Output: `{"total_jobs": 1, ...}`
-- **Explainability**: Output is exactly the number of valid dictionaries passed.
+### Tool-by-tool decision/rule transparency
+Formula: total_jobs = len(jobs). Rejects any non-list `jobs` payload.
 
-### 2. analyze-skill-demand
-- **Agent purpose**: Calculate how often skills appear.
-- **Inputs**: `jobs` (array of objects containing `required_skills` and `preferred_skills`).
-- **Decision/process**: Iterates through each job and counts unique occurrences of skills.
-- **Limits**: Case-sensitive if data is not normalized.
-- **Output contract**: Returns counts and percentages for each skill.
-- **Formula**: `percentage = (skill_count / total_jobs) * 100`
-- **Tool-by-tool example**: 
-  - Input: `{"jobs": [{"required_skills": ["Python"]}]}`
-  - Output: `{"skill_percentages": {"Python": 100.0}, ...}`
-- **Explainability**: Direct division of occurrences by total job array size.
+### Tool-by-tool examples
+Input: {"jobs": [{"job_id": "1", "title": "SE"}]}
+Output: {"total_jobs": 1, "success": true, "message": "Successfully counted 1 jobs."}
 
-### 3. analyze-salary-data
-- **Agent purpose**: Compute salary statistics grouped by currency.
-- **Inputs**: `jobs` (array of objects with `salary_min`, `salary_max`, `currency`).
-- **Decision/process**: Sorts and averages salary data. Groups by currency.
-- **Limits**: Ignores jobs without valid numeric salaries.
-- **Output contract**: Min, max, average, median per currency.
-- **Formula**: `average = sum(salaries) / count(salaries)`, `salary_midpoint = (salary_min + salary_max) / 2`
-- **Tool-by-tool example**:
-  - Input: `{"jobs": [{"salary_min": 100, "salary_max": 200, "currency": "USD"}]}`
-  - Output: `{"currencies": {"USD": {"average_salary": 150.0}}, ...}`
-- **Explainability**: Standard statistical aggregations strictly mapped to the provided numbers.
+### Explainability of calculated results
+The output value `total_jobs` is exactly the length of the valid `jobs` array provided.
 
-### 4. analyze-location-demand
-- **Agent purpose**: Group jobs by geographical location or work mode.
-- **Inputs**: `jobs` (array of objects).
-- **Decision/process**: Groups exact string matches of the `location` field.
-- **Limits**: Does not perform geographical mapping (e.g., "NY" and "New York" are separate).
-- **Output contract**: Counts per location string.
-- **Formula**: `location_count = sum(1 for job in jobs if job.location == X)`
-- **Tool-by-tool example**:
-  - Input: `{"jobs": [{"location": "Remote"}]}`
-  - Output: `{"locations": {"Remote": 1}, ...}`
-- **Explainability**: Simple key-value frequency dictionary.
+### Provenance
+All data originates directly and exclusively from the user-supplied `jobs` payload.
 
-### 5. analyze-company-demand
-- **Agent purpose**: Evaluate the presence of employers in the dataset.
-- **Inputs**: `jobs` (array of objects).
-- **Decision/process**: Counts occurrences of the `company` field.
-- **Limits**: Does not rank employer quality, only volume of listings.
-- **Output contract**: Job count per company.
-- **Formula**: `company_count = sum(1 for job in jobs if job.company == X)`
-- **Tool-by-tool example**:
-  - Input: `{"jobs": [{"company": "Tech Corp"}]}`
-  - Output: `{"jobs_per_company": {"Tech Corp": 1}, ...}`
-- **Explainability**: Output is a direct sum of occurrences in the input list.
+### Failure handling
+Raises ValueError if `jobs` is missing or not a list, or if a job lacks `job_id` or `title`.
 
-### 6. calculate-skill-gap
-- **Agent purpose**: Identify matches between a candidate and a job.
-- **Inputs**: `candidate_skills` (list of strings), `required_skills` (list of strings), `preferred_skills` (list of strings).
-- **Decision/process**: Performs set intersection between candidate skills and required/preferred skills. Case-insensitive matching.
-- **Limits**: Cannot infer skills (e.g., knowing "React" does not automatically grant "JavaScript").
-- **Output contract**: Match percentages and missing skill lists.
-- **Formula**: `required_match_percentage = matched_required_skills / total_required_skills * 100`
-- **Tool-by-tool example**:
-  - Input: `{"candidate_skills": ["Python"], "required_skills": ["Python", "AWS"]}`
-  - Output: `{"required_skill_match_percentage": 50.0, "missing_required_skills": ["AWS"], ...}`
-- **Explainability**: Set intersection size divided by required set size.
+### Validation behavior
+Strictly type-checks that `jobs` is a list, and iterates to ensure every item is a dictionary.
 
-### 7. calculate-job-market-summary
-- **Agent purpose**: High-level market overview.
-- **Inputs**: `jobs` (array of objects).
-- **Decision/process**: Aggregates total jobs, unique companies, unique locations, and global top skills.
-- **Limits**: Summary applies exclusively to the supplied dataset.
-- **Output contract**: Total counts, salary statistics, and categorical distributions.
-- **Formula**: Combination of `len()` operations across unique sets.
-- **Tool-by-tool example**:
-  - Input: `{"jobs": [{"company": "A", "location": "B", "required_skills": ["C"]}]}`
-  - Output: `{"unique_companies": 1, "unique_locations": 1, ...}`
-- **Explainability**: Values strictly equal to the length of deduplicated sets extracted from the payload.
+### Security boundaries
+Stateless execution. No eval, exec, or subprocess calls are made.
 
-## Explainability of Calculated Results
-Every number generated by this agent can be manually verified by reviewing the source payload and applying the documented formulas. Calculations are fully transparent. There are no black-box weights, no probabilistic inferences, and no non-deterministic AI processes involved in the core metrics.
+### Deterministic behavior
+Given the exact same `jobs` list, the `len(jobs)` operation will inherently always return the exact same integer.
 
-## Provenance
-- **Source**: Exclusively user-supplied structured data payloads.
-- **Derived**: All metrics, percentages, medians, and averages are deterministically derived from the source payload.
-- **External**: The agent utilizes no external APIs, databases, or third-party dependencies to retrieve information.
+### Data assumptions
+Assumes every job dictionary represents exactly one job listing.
 
-## Failure Handling
-In the event of anomalous or missing data:
-1. Missing optional fields (e.g., `preferred_skills`) are handled safely and treated as empty collections.
-2. Missing required fields (e.g., `jobs` list) result in an immediate, explicit `ValueError` that is gracefully caught by the tool wrapper.
-3. The wrapper returns `{ "success": false, "error_type": "ValueError", "message": "..." }` preventing runtime panics.
+### How inputs become outputs
+The raw JSON array is loaded into a Python list, measured with `len()`, and serialized back to JSON.
 
-## Validation Behavior
-All tools execute a strict `validate_input` method prior to running business logic.
-- Type enforcement: Ensures `jobs` is a list, and individual elements are dictionaries.
-- Mathematical safety: Ensures division operations never divide by zero (e.g., when calculating match percentages against empty requirements).
+### What the agent does NOT do
+Does NOT fetch job listings from the internet. Does NOT guess titles.
 
-## Security Boundaries
-- **No execution**: The agent absolutely prohibits the use of `eval()`, `exec()`, or `subprocess` commands.
-- **No environment leak**: The agent never reads environment variables except for explicit, secure configurations.
-- **Data isolation**: Tool executions are completely stateless.
+## analyze-skill-demand
 
-## Deterministic Behavior
-The agent guarantees identical output for identical input. Re-running the agent with the exact same payload will unconditionally result in the exact same mathematical summary. 
+### Agent purpose
+Analyze the demand for specific skills in job listings.
 
-## Data Assumptions
-- Salaries represent annual values if not explicitly marked.
-- Deduplication relies on exact string matching (case-insensitive for skills, but exact for locations and companies unless standardized by the caller).
-- Empty strings are treated as valid missing data ("Unknown").
+### Inputs
+YAML schema expects a `jobs` array. Each job object may optionally contain `required_skills` and `preferred_skills` arrays. Required: `jobs`.
 
-## How Inputs Become Outputs
-Input JSON lists are iterated sequentially in memory. Fields are extracted into Python primitives (sets, dictionaries, lists) for counting and statistical mapping. The final state of these primitives is serialized directly back into the output JSON dictionary. 
+### Decision/process
+Iterates jobs to count occurrences of strings in `required_skills` and `preferred_skills`, then calculates percentages.
 
-## What the Agent Does NOT Do
-- The agent **does NOT** require or utilize an LLM (Large Language Model) to execute its core mathematical functionality.
-- The agent **does NOT** use external APIs to enrich data.
-- The agent **does NOT** perform autonomous machine-learning predictions or forecasts.
-- The agent **does NOT** guarantee hiring success.
-- The agent **does NOT** feature unstructured natural language reasoning; all inputs and outputs must strictly conform to schemas.
+### Limits
+Only analyzes the skills explicitly provided. Case-sensitive depending on the input normalization.
 
-## Checkpoint 2 Self-Audit
+### Output contract
+Dictionary containing `total_jobs_analyzed`, `skill_frequency`, `skill_percentages`, etc.
 
-| Requirement | Present? | Exact section | Evidence |
-|-------------|----------|---------------|----------|
-| Agent purpose | PASS | Agent Purpose | Clearly defines deterministic analysis purpose. |
-| Inputs | PASS | Inputs | Defines inputs as structured data payloads exclusively. |
-| Decision/process | PASS | Decision/Process | Explains decisions are purely validation/math logic. |
-| Limits | PASS | Limits | Lists 4 explicit limits regarding scope and data capabilities. |
-| Output contract | PASS | Output Contract | Details structured primitive dictionary returns. |
-| Complete execution lifecycle | PASS | Complete Execution Lifecycle | 7-step breakdown from payload to return. |
-| Tool-by-tool decision/rule transparency | PASS | Tool-by-Tool Decision/Rule... | Rules and formulas listed for all 7 tools. |
-| Tool-by-tool examples | PASS | Tool-by-Tool Decision/Rule... | Example I/O provided for all 7 tools. |
-| Explainability of calculated results | PASS | Explainability of Calculated Results | States absence of black boxes; manual verification possible. |
-| Provenance | PASS | Provenance | Traces origins exclusively to user data. |
-| Failure handling | PASS | Failure Handling | Documents safe error catching and JSON error returns. |
-| Validation behavior | PASS | Validation Behavior | Details type enforcement and math safety checks. |
-| Security boundaries | PASS | Security Boundaries | Verifies prohibition of eval/exec/subprocess. |
-| Deterministic behavior | PASS | Deterministic Behavior | Guarantees identical output for identical input. |
-| Data assumptions | PASS | Data Assumptions | Details case-sensitivity and deduplication rules. |
-| How inputs become outputs | PASS | How Inputs Become Outputs | Traces JSON list ingestion to memory to output JSON. |
-| What the agent does NOT do | PASS | What the Agent Does NOT Do | Explicitly denies LLM usage, API calls, and forecasting. |
+### Complete execution lifecycle
+Input adapter -> validate_input() -> execute() aggregates lists into sets and frequencies -> calculation of percentages -> return dict.
+
+### Tool-by-tool decision/rule transparency
+Formula: percentage = (skill_count / total_jobs) * 100.
+
+### Tool-by-tool examples
+Input: {"jobs": [{"required_skills": ["Python"]}]}
+Output: {"total_jobs_analyzed": 1, "skill_frequency": {"Python": 1}, "skill_percentages": {"Python": 100.0}}
+
+### Explainability of calculated results
+Percentages are simple division of the frequency count by the total jobs parsed, multiplied by 100.
+
+### Provenance
+Skills are extracted purely from the `required_skills` and `preferred_skills` fields of the input.
+
+### Failure handling
+Raises ValueError if `jobs` is not a list or if `required_skills` is provided but is not a list.
+
+### Validation behavior
+Type-checks the `jobs` key and verifies nested skill fields are strictly list types if present.
+
+### Security boundaries
+Stateless map-reduce aggregation in memory with no external side effects.
+
+### Deterministic behavior
+Exact same input arrays will yield the exact same frequency dictionaries and percentages.
+
+### Data assumptions
+Assumes provided skills are correctly spelled. Treats 'Python' and 'python' as identical if normalized prior to input.
+
+### How inputs become outputs
+Iterates job dictionaries, populates Python `dict` with counts, divides by length of jobs list, and returns standard dictionary.
+
+### What the agent does NOT do
+Does NOT infer skills (e.g., seeing 'React' does not add 'JavaScript').
+
+## analyze-salary-data
+
+### Agent purpose
+Analyze salary statistics from job listings.
+
+### Inputs
+YAML schema expects a `jobs` array. Jobs may have `salary_min`, `salary_max`, and `currency`. Required: `jobs`.
+
+### Decision/process
+Groups salaries by currency and calculates min, max, average, and median per currency group.
+
+### Limits
+Ignores jobs without valid numeric salaries or currency codes.
+
+### Output contract
+Dictionary of currencies containing `min`, `max`, `average`, `median`, and `count`.
+
+### Complete execution lifecycle
+Input adapter -> validate_input() -> execute() groups values -> standard math operations on groups -> return stats dictionary.
+
+### Tool-by-tool decision/rule transparency
+Formulas: average = sum(salaries)/len(salaries). Midpoint = (min+max)/2.
+
+### Tool-by-tool examples
+Input: {"jobs": [{"salary_min": 100, "salary_max": 200, "currency": "USD"}]}
+Output: {"USD": {"average": 150.0, "min": 100, "max": 200}}
+
+### Explainability of calculated results
+The results are strict textbook statistical functions applied to the collected salary values.
+
+### Provenance
+Extracts explicitly provided `salary_min` and `salary_max` from the input payload.
+
+### Failure handling
+Raises ValueError if `salary_min` > `salary_max` or if salaries are negative.
+
+### Validation behavior
+Ensures `jobs` is a list and performs logical boundary checks on numerical salary values.
+
+### Security boundaries
+Math operations are standard Python float/int operations, protected from overflow attacks by framework limits.
+
+### Deterministic behavior
+Mathematical statistics on a static list are mathematically proven to be identical every run.
+
+### Data assumptions
+Assumes salaries represent annual values unless normalized differently by caller. No automatic currency conversion.
+
+### How inputs become outputs
+Numerical values are mapped into lists partitioned by string currency keys, processed by `sum()` and `len()`, and mapped to output keys.
+
+### What the agent does NOT do
+Does NOT perform real-time FX currency conversions.
+
+## analyze-location-demand
+
+### Agent purpose
+Analyze location demand distribution (remote, hybrid, physical).
+
+### Inputs
+YAML schema expects a `jobs` array. Required: `jobs`.
+
+### Decision/process
+Groups jobs strictly by string matching the `location` field.
+
+### Limits
+Does not understand geographic hierarchy (e.g. 'NYC' is entirely distinct from 'New York').
+
+### Output contract
+Dictionary with location names as keys and integer frequencies as values.
+
+### Complete execution lifecycle
+Input adapter -> validate_input() -> execute() iterates to populate frequency dictionary -> return.
+
+### Tool-by-tool decision/rule transparency
+Formula: location_count = sum(1 for job in jobs if job.location == X).
+
+### Tool-by-tool examples
+Input: {"jobs": [{"location": "Remote"}, {"location": "Remote"}]}
+Output: {"locations": {"Remote": 2}}
+
+### Explainability of calculated results
+It is a 1-to-1 reflection of how many times a given location string appeared in the array.
+
+### Provenance
+Locations are read directly from the `location` key of the job object.
+
+### Failure handling
+Raises ValueError for invalid payload structures.
+
+### Validation behavior
+Ensures `jobs` is a list of dicts. Safely ignores missing `location` fields or groups them as 'unknown'.
+
+### Security boundaries
+Executes entirely in memory with no external I/O.
+
+### Deterministic behavior
+String matching frequency counts on static data are mathematically deterministic.
+
+### Data assumptions
+Assumes the caller has standardized spelling if deduplication is expected.
+
+### How inputs become outputs
+Input list is traversed, strings are extracted, and a hash map (dictionary) accumulates the occurrences.
+
+### What the agent does NOT do
+Does NOT use mapping APIs to resolve coordinates or zip codes.
+
+## analyze-company-demand
+
+### Agent purpose
+Analyze structured job listings for company demand.
+
+### Inputs
+YAML schema expects a `jobs` array. Required: `jobs`.
+
+### Decision/process
+Groups jobs strictly by string matching the `company` field.
+
+### Limits
+Only counts volume of listings, does not assess company quality.
+
+### Output contract
+Dictionary containing `jobs_per_company` with company names as keys and integers as values.
+
+### Complete execution lifecycle
+Input adapter -> validate_input() -> execute() iterates to populate frequency dictionary -> return.
+
+### Tool-by-tool decision/rule transparency
+Formula: company_count = sum(1 for job in jobs if job.company == X).
+
+### Tool-by-tool examples
+Input: {"jobs": [{"company": "TechCorp"}]}
+Output: {"jobs_per_company": {"TechCorp": 1}}
+
+### Explainability of calculated results
+The results simply reflect the count of listings associated with that company string.
+
+### Provenance
+The company name is extracted directly from the user-supplied job object.
+
+### Failure handling
+Standard payload validation errors.
+
+### Validation behavior
+Validates list format. Handles missing company names safely.
+
+### Security boundaries
+Pure in-memory string comparison.
+
+### Deterministic behavior
+Hash map aggregation ensures exact identical outputs for identical inputs.
+
+### Data assumptions
+Assumes 'TechCorp' and 'Tech Corp' are different companies unless normalized by the caller.
+
+### How inputs become outputs
+Extracts the `company` field to serve as dictionary keys, incrementing their integer values.
+
+### What the agent does NOT do
+Does NOT search the internet to verify the company exists.
+
+## calculate-skill-gap
+
+### Agent purpose
+Compare a candidate's supplied skills with required and preferred skills.
+
+### Inputs
+YAML schema expects `candidate_skills` (array of strings), `required_skills` (array of strings), and optional `preferred_skills` (array of strings). Required: `candidate_skills`, `required_skills`.
+
+### Decision/process
+Performs set intersections and differences between candidate skills and job skills.
+
+### Limits
+Matches are exact text representations (usually lowercased and stripped of whitespace). No semantic similarity matching.
+
+### Output contract
+Dictionary with match percentages, missing required skills, and missing preferred skills.
+
+### Complete execution lifecycle
+Input adapter -> validate_input() -> execute() generates sets -> calculates intersection/difference -> computes percentages -> returns.
+
+### Tool-by-tool decision/rule transparency
+Formula: required_match_percentage = (matched_required_skills / total_required_skills) * 100.
+
+### Tool-by-tool examples
+Input: {"candidate_skills": ["Python"], "required_skills": ["Python", "AWS"]}
+Output: {"required_skill_match_percentage": 50.0, "missing_required_skills": ["AWS"]}
+
+### Explainability of calculated results
+The percentage is calculated by taking the length of the set intersection over the length of the required set.
+
+### Provenance
+Both the candidate skills and the required skills are supplied entirely by the input payload.
+
+### Failure handling
+Raises ValueError if required skills are missing (cannot calculate percentage).
+
+### Validation behavior
+Validates that all three skill fields are list types.
+
+### Security boundaries
+Standard Python set operations with no external risks.
+
+### Deterministic behavior
+Set mathematics guarantee the same intersections every run.
+
+### Data assumptions
+Assumes skills are directly comparable via string equality. Normalizes to lowercase for comparison.
+
+### How inputs become outputs
+Converts input lists to lowercase sets, applies `.intersection()` and `.difference()`, and maps results to output.
+
+### What the agent does NOT do
+Does NOT guess what a candidate might know based on their current skills.
+
+## calculate-job-market-summary
+
+### Agent purpose
+Produce a deterministic summary from supplied job-market records.
+
+### Inputs
+YAML schema expects a `jobs` array. Required: `jobs`.
+
+### Decision/process
+Aggregates findings from the other analytical tools (companies, locations, skills) into a high-level summary overview.
+
+### Limits
+The summary is bounded strictly by the provided dataset and does not represent macroeconomic truths.
+
+### Output contract
+Dictionary containing unique counts and top-level summary metrics.
+
+### Complete execution lifecycle
+Input adapter -> validate_input() -> execute() aggregates data from all fields -> return dictionary.
+
+### Tool-by-tool decision/rule transparency
+Formulas: combinations of unique sets via `len(set(items))`.
+
+### Tool-by-tool examples
+Input: {"jobs": [{"company": "A", "location": "B", "required_skills": ["C"]}]}
+Output: {"unique_companies": 1, "unique_locations": 1, "total_jobs": 1}
+
+### Explainability of calculated results
+Metrics are simple distinct counts (length of sets) from the payload.
+
+### Provenance
+All summary metrics are strictly aggregated from the provided job array.
+
+### Failure handling
+Standard payload validation errors if the array is missing or malformed.
+
+### Validation behavior
+Ensures the input is a valid list of dictionaries.
+
+### Security boundaries
+Operates fully in memory.
+
+### Deterministic behavior
+Aggregating a static array into a set yields a mathematically deterministic size.
+
+### Data assumptions
+Empty strings or missing fields are omitted from unique counts.
+
+### How inputs become outputs
+Extracts fields, adds them to unique `set` objects, and returns their `.length`.
+
+### What the agent does NOT do
+Does NOT write summary reports using a Large Language Model.
+
