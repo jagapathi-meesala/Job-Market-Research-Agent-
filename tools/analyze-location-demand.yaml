@@ -1,0 +1,12 @@
+name: analyze-location-demand
+description: Analyze location demand distribution (remote, hybrid, physical).
+input_schema:
+  type: object
+  properties:
+    jobs:
+      type: array
+      description: List of job objects to analyze
+      items:
+        type: object
+  required:
+  - jobs

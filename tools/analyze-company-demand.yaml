@@ -1,0 +1,12 @@
+name: analyze-company-demand
+description: Analyze structured job listings for company demand.
+input_schema:
+  type: object
+  properties:
+    jobs:
+      type: array
+      description: List of job objects to analyze
+      items:
+        type: object
+  required:
+  - jobs

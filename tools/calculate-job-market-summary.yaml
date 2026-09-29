@@ -1,0 +1,12 @@
+name: calculate-job-market-summary
+description: Produce a deterministic summary from supplied job-market records.
+input_schema:
+  type: object
+  properties:
+    jobs:
+      type: array
+      description: List of job objects to analyze
+      items:
+        type: object
+  required:
+  - jobs

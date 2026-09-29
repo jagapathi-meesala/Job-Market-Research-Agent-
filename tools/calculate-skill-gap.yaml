@@ -1,0 +1,23 @@
+name: calculate-skill-gap
+description: Compare a candidate's supplied skills with required and preferred skills.
+input_schema:
+  type: object
+  properties:
+    candidate_skills:
+      type: array
+      description: List of candidate's skills
+      items:
+        type: string
+    required_skills:
+      type: array
+      description: List of required skills for the job
+      items:
+        type: string
+    preferred_skills:
+      type: array
+      description: List of preferred skills for the job
+      items:
+        type: string
+  required:
+  - candidate_skills
+  - required_skills

@@ -1,0 +1,12 @@
+name: analyze-job-listings
+description: Analyze structured job listings to extract basic frequencies.
+input_schema:
+  type: object
+  properties:
+    jobs:
+      type: array
+      description: List of job objects to analyze
+      items:
+        type: object
+  required:
+  - jobs

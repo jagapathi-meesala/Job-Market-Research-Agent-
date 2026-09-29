@@ -1,0 +1,12 @@
+name: analyze-skill-demand
+description: Analyze the demand for specific skills in job listings.
+input_schema:
+  type: object
+  properties:
+    jobs:
+      type: array
+      description: List of job objects to analyze
+      items:
+        type: object
+  required:
+  - jobs
